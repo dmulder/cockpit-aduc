@@ -61,6 +61,22 @@ class LdapConnection {
 		});
 	}
 
+	del(dn, callback) {
+		let client = ldap.createClient(this.opts);
+		client.bind(this.bind_opts.username, this.bind_opts.password, err => {
+			if (err) {
+				client.unbind();
+				callback(err);
+				return;
+			}
+
+			client.del(dn, err => {
+				client.unbind();
+				callback(err);
+			});
+		});
+	}
+
 	well_known_container(container, callback) {
 		var wkguiduc = null;
 		if (container == 'system') {
