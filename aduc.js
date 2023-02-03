@@ -173,4 +173,47 @@ class LdapConnection {
 			});
 		}
 	}
+
+	add_user(attrs, userPassword, confirm_passwd, callback, must_change_passwd=false, cannot_change_passwd=false, passwd_never_expires=false, account_disabled=false, inetorgperson=false, container=null) {
+		if (userPassword !== confirm_passwd) {
+			callback('The passwords do not match.');
+			return null;
+		}
+		attrs.objectClass = ['top', 'person', 'organizationalPerson', 'user'];
+		if (inetorgperson) {
+			attrs.objectClass.push('inetOrgPerson');
+		}
+		attrs.objectCategory = `CN=Person,CN=Schema,CN=Configuration,${this.bindDN}`;
+		if (!('name' in attrs)) {
+			attrs.name = attrs.cn;
+		}
+		let uac = 0x0200;
+		if (cannot_change_passwd && !passwd_never_expires) {
+			uac |= 0x0040;
+		}
+		if (passwd_never_expires) {
+			uac |= 0x10000;
+		}
+		if (account_disabled) {
+			uac |= 0x0002;
+		}
+		attrs.userAccountControl = [uac];
+		if (must_change_passwd) {
+			attrs.pwdLastSet = '0';
+		} else {
+			attrs.pwdLastSet = '-1';
+		}
+
+		if (container != null) {
+			let dn = `CN=${attrs.cn},${container}`;
+			attrs.distinguishedName = dn;
+			this.add(dn, attrs, callback);
+		} else {
+			this.well_known_container('users', wkc => {
+				let dn = `CN=${attrs["cn"]},${wkc}`;
+				attrs["distinguishedName"] = dn;
+				this.add(dn, attrs, callback);
+			});
+		}
+	}
 }
