@@ -77,6 +77,22 @@ class LdapConnection {
 		});
 	}
 
+	modify(dn, change, callback) {
+		let client = ldap.createClient(this.opts);
+		client.bind(this.bind_opts.username, this.bind_opts.password, err => {
+			if (err) {
+				client.unbind();
+				callback(err);
+				return;
+			}
+
+			client.modify(dn, change, err => {
+				client.unbind();
+				callback(err);
+			});
+		});
+	}
+
 	well_known_container(container, callback) {
 		var wkguiduc = null;
 		if (container == 'system') {
@@ -174,6 +190,18 @@ class LdapConnection {
 		}
 	}
 
+	set_password(dn, password, callback) {
+		const unicodePwd = new Buffer(`"${password}"`, 'utf16le').toString('base64');
+		const change = new ldap.Change({
+			operation: 'replace',
+			modification: {
+				unicodePwd: unicodePwd
+			}
+		});
+
+		this.modify(dn, change, callback);
+	}
+
 	add_user(attrs, userPassword, confirm_passwd, callback, must_change_passwd=false, cannot_change_passwd=false, passwd_never_expires=false, account_disabled=false, inetorgperson=false, container=null) {
 		if (userPassword !== confirm_passwd) {
 			callback('The passwords do not match.');
@@ -207,12 +235,24 @@ class LdapConnection {
 		if (container != null) {
 			let dn = `CN=${attrs.cn},${container}`;
 			attrs.distinguishedName = dn;
-			this.add(dn, attrs, callback);
+			this.add(dn, attrs, err => {
+				if (!err) {
+					this.set_password(dn, userPassword, callback);
+				} else {
+					callback(err);
+				}
+			});
 		} else {
 			this.well_known_container('users', wkc => {
 				let dn = `CN=${attrs["cn"]},${wkc}`;
 				attrs["distinguishedName"] = dn;
-				this.add(dn, attrs, callback);
+				this.add(dn, attrs, err => {
+					if (!err) {
+						this.set_password(dn, userPassword, callback);
+					} else {
+						callback(err);
+					}
+				});
 			});
 		}
 	}
